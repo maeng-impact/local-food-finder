@@ -1,65 +1,114 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase 데이터베이스 연결 설정
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export default async function HomePage() {
-  // DB에서 서현동 삼겹살 데이터 1개 가져오기
-  const { data: shop } = await supabase
-    .from('shops')
+// 60초마다 화면 데이터를 자동으로 최신화
+export const revalidate = 60;
+
+async function getPlaces() {
+  const { data, error } = await supabase
+    .from('places')
     .select('*')
-    .eq('region_dong', '서현동')
-    .eq('category', '삼겹살')
-    .single();
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Data fetch error:', error);
+    return [];
+  }
+  return data || [];
+}
+
+export default async function HomePage() {
+  const places = await getPlaces();
 
   return (
-    <main style={{ maxWidth: '600px', margin: '0 auto', padding: '20px', fontFamily: 'sans-serif' }}>
-      <header style={{ borderBottom: '2px solid #333', pb: '10px', marginBottom: '20px' }}>
-        <span style={{ fontSize: '12px', color: '#ff6b6b', fontWeight: 'bold' }}>동네 큐레이션 #1</span>
-        <h1 style={{ fontSize: '24px', marginTop: '5px' }}>서현동 삼겹살 추천</h1>
-        <p style={{ color: '#666', fontSize: '14px' }}>포털 평점 종합 검증 완료 & 인근 추천 코스</p>
+    <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '20px', fontFamily: 'sans-serif' }}>
+      <header style={{ textAlign: 'center', margin: '40px 0' }}>
+        <h1 style={{ fontSize: '2.2rem', color: '#111827', marginBottom: '8px' }}>
+          📍 우리 동네 로컬 발견
+        </h1>
+        <p style={{ color: '#6B7280' }}>
+          공공데이터로 찾는 알짜배기 관광지, 맛집, 반려동물 동반 장소
+        </p>
       </header>
 
-      {shop ? (
-        <section style={{ border: '1px solid #ddd', borderRadius: '12px', padding: '20px', backgroundColor: '#fff', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ fontSize: '20px', margin: 0 }}>{shop.shop_name}</h2>
-            {shop.has_pet && <span style={{ backgroundColor: '#e6fcf5', color: '#0ca678', padding: '4px 8px', borderRadius: '20px', fontSize: '12px' }}>🐾 반려동물 동반</span>}
-          </div>
-          
-          <p style={{ color: '#f59f00', fontWeight: 'bold', fontSize: '14px', marginTop: '8px' }}>
-            ★ {shop.score_summary}
-          </p>
-          
-          <div style={{ backgroundColor: '#f8f9fa', padding: '12px', borderRadius: '8px', margin: '15px 0', fontSize: '14px', lineHeight: '1.6' }}>
-            <strong>💡 큐레이터 선정 이유:</strong><br />
-            {shop.reason_comment}
-          </div>
+      <main>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+          gap: '20px'
+        }}>
+          {places.length === 0 ? (
+            <p style={{ textAlign: 'center', gridColumn: '1 / -1', color: '#9CA3AF' }}>
+              아직 등록된 장소가 없습니다.
+            </p>
+          ) : (
+            places.map((place) => (
+              <div 
+                key={place.id} 
+                style={{
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  backgroundColor: '#FFFFFF',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                }}
+              >
+                {place.image_url ? (
+                  <img 
+                    src={place.image_url} 
+                    alt={place.title} 
+                    style={{ width: '100%', height: '180px', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <div style={{
+                    width: '100%',
+                    height: '180px',
+                    backgroundColor: '#F3F4F6',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#9CA3AF'
+                  }}>
+                    이미지 없음
+                  </div>
+                )}
+                
+                <div style={{ padding: '16px' }}>
+                  <span style={{
+                    display: 'inline-block',
+                    padding: '4px 8px',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold',
+                    borderRadius: '4px',
+                    backgroundColor: place.source_type === 'pet_tour' ? '#FEF3C7' : '#E0E7FF',
+                    color: place.source_type === 'pet_tour' ? '#D97706' : '#4338CA',
+                    marginBottom: '8px'
+                  }}>
+                    {place.category || '장소'}
+                  </span>
 
-          <p style={{ fontSize: '13px', color: '#868e96', margin: 0 }}>
-            📍 위치: {shop.address}
-          </p>
-        </section>
-      ) : (
-        <p>식당 정보를 불러오는 중입니다...</p>
-      )}
+                  <h3 style={{ fontSize: '1.1rem', margin: '4px 0 8px 0', color: '#1F2937' }}>
+                    {place.title}
+                  </h3>
 
-      {/* 이웃 공공데이터 연계 구역 (다음 스텝에서 자동 연결 예정) */}
-      <section style={{ marginTop: '30px' }}>
-        <h3 style={{ fontSize: '16px', color: '#333' }}>🐾 근처 들르기 좋은 장소 (공공데이터)</h3>
-        <div style={{ padding: '15px', border: '1px dashed #ccc', borderRadius: '8px', color: '#888', fontSize: '13px' }}>
-          • TourAPI 연동 예정: 율동공원 산책로 (차량 5분 거리)
+                  <p style={{ fontSize: '0.875rem', color: '#4B5563', margin: '4px 0' }}>
+                    📌 {place.address || '주소 정보 없음'}
+                  </p>
+
+                  {place.tel && (
+                    <p style={{ fontSize: '0.8rem', color: '#6B7280', margin: '4px 0' }}>
+                      📞 {place.tel}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
         </div>
-      </section>
-
-      <section style={{ marginTop: '20px' }}>
-        <h3 style={{ fontSize: '16px', color: '#333' }}>💡 인근 착한가격업소</h3>
-        <div style={{ padding: '15px', border: '1px dashed #ccc', borderRadius: '8px', color: '#888', fontSize: '13px' }}>
-          • 착한가격 API 연동 예정: 가성비 식당 리스트 준비 중
-        </div>
-      </section>
-    </main>
+      </main>
+    </div>
   );
 }
